@@ -114,9 +114,9 @@ export class InfrastructureStack extends cdk.Stack {
 
     // Allow Lambda to connect to RDS on port 5432
     dbSecurityGroup.addIngressRule(
-      lambdaSecurityGroup,
+      ec2.Peer.anyIpv4(),
       ec2.Port.tcp(5432),
-      'Allow Lambda to connect to RDS'
+      'Allow public access to RDS for dev'
     );
 
     // ─────────────────────────────────────────
@@ -135,12 +135,13 @@ export class InfrastructureStack extends cdk.Stack {
         ec2.InstanceSize.MICRO
       ),
       vpc,
-      vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_ISOLATED },
+      vpcSubnets: { subnetType: ec2.SubnetType.PUBLIC },
       securityGroups: [dbSecurityGroup],
       credentials: rds.Credentials.fromSecret(dbSecret),
       databaseName: 'studydb',
       removalPolicy: cdk.RemovalPolicy.DESTROY,
       deletionProtection: false,
+      publiclyAccessible: true,
     });
 
     // ─────────────────────────────────────────
@@ -162,7 +163,8 @@ export class InfrastructureStack extends cdk.Stack {
       environment: commonEnv,
       vpc,
       securityGroups: [lambdaSecurityGroup],
-      vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_ISOLATED },
+      vpcSubnets: { subnetType: ec2.SubnetType.PUBLIC },
+      allowPublicSubnet: true,
     };
 
     const uploadLambda = new lambda.Function(this, 'UploadLambda', {
