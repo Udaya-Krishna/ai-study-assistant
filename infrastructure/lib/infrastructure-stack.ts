@@ -154,6 +154,11 @@ export class InfrastructureStack extends cdk.Stack {
       SCORES_TABLE: scoresTable.tableName,
       DOCUMENTS_TABLE: documentsTable.tableName,
       DB_SECRET_ARN: dbSecret.secretArn,
+      DB_HOST: process.env.DB_HOST || '',
+      DB_PORT: process.env.DB_PORT || '5432',
+      DB_USER: process.env.DB_USER || '',
+      DB_PASSWORD: process.env.DB_PASSWORD || '',
+      DB_NAME: process.env.DB_NAME || 'studydb',
       REGION: this.region,
     };
 
