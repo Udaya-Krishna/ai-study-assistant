@@ -82,7 +82,7 @@ export class InfrastructureStack extends cdk.Stack {
     });
 
     // ─────────────────────────────────────────
-    // 4. VPC — for RDS
+    // 4. VPC — for RDS and Lambda
     // ─────────────────────────────────────────
     const vpc = new ec2.Vpc(this, 'StudyVpc', {
       maxAzs: 2,
@@ -99,6 +99,26 @@ export class InfrastructureStack extends cdk.Stack {
       ],
     });
 
+    // Security group for Lambda
+    const lambdaSecurityGroup = new ec2.SecurityGroup(this, 'LambdaSG', {
+      vpc,
+      description: 'Security group for Lambda functions',
+      allowAllOutbound: true,
+    });
+
+    // Security group for RDS
+    const dbSecurityGroup = new ec2.SecurityGroup(this, 'DbSG', {
+      vpc,
+      description: 'Security group for RDS',
+    });
+
+    // Allow Lambda to connect to RDS on port 5432
+    dbSecurityGroup.addIngressRule(
+      lambdaSecurityGroup,
+      ec2.Port.tcp(5432),
+      'Allow Lambda to connect to RDS'
+    );
+
     // ─────────────────────────────────────────
     // 5. RDS PostgreSQL — pgvector for RAG
     // ─────────────────────────────────────────
@@ -106,7 +126,7 @@ export class InfrastructureStack extends cdk.Stack {
       username: 'studyadmin',
     });
 
-    const database = new rds.DatabaseInstance(this, 'StudyDb', {
+    const _database = new rds.DatabaseInstance(this, 'StudyDb', {
       engine: rds.DatabaseInstanceEngine.postgres({
         version: rds.PostgresEngineVersion.VER_15,
       }),
@@ -116,6 +136,7 @@ export class InfrastructureStack extends cdk.Stack {
       ),
       vpc,
       vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_ISOLATED },
+      securityGroups: [dbSecurityGroup],
       credentials: rds.Credentials.fromSecret(dbSecret),
       databaseName: 'studydb',
       removalPolicy: cdk.RemovalPolicy.DESTROY,
@@ -135,48 +156,47 @@ export class InfrastructureStack extends cdk.Stack {
       REGION: this.region,
     };
 
-    const uploadLambda = new lambda.Function(this, 'UploadLambda', {
-      functionName: 'ai-study-upload',
+    const commonLambdaProps = {
       runtime: lambda.Runtime.PYTHON_3_11,
       handler: 'lambda_function.handler',
-      code: lambda.Code.fromAsset(path.join(__dirname, '../../backend/upload')),
       environment: commonEnv,
+      vpc,
+      securityGroups: [lambdaSecurityGroup],
+      vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_ISOLATED },
+    };
+
+    const uploadLambda = new lambda.Function(this, 'UploadLambda', {
+      ...commonLambdaProps,
+      functionName: 'ai-study-upload',
+      code: lambda.Code.fromAsset(path.join(__dirname, '../../backend/upload')),
       timeout: cdk.Duration.seconds(30),
     });
 
     const embedLambda = new lambda.Function(this, 'EmbedLambda', {
+      ...commonLambdaProps,
       functionName: 'ai-study-embed',
-      runtime: lambda.Runtime.PYTHON_3_11,
-      handler: 'lambda_function.handler',
       code: lambda.Code.fromAsset(path.join(__dirname, '../../backend/embed')),
-      environment: commonEnv,
       timeout: cdk.Duration.seconds(120),
     });
 
     const summaryLambda = new lambda.Function(this, 'SummaryLambda', {
+      ...commonLambdaProps,
       functionName: 'ai-study-summary',
-      runtime: lambda.Runtime.PYTHON_3_11,
-      handler: 'lambda_function.handler',
       code: lambda.Code.fromAsset(path.join(__dirname, '../../backend/summary')),
-      environment: commonEnv,
       timeout: cdk.Duration.seconds(60),
     });
 
     const quizLambda = new lambda.Function(this, 'QuizLambda', {
+      ...commonLambdaProps,
       functionName: 'ai-study-quiz',
-      runtime: lambda.Runtime.PYTHON_3_11,
-      handler: 'lambda_function.handler',
       code: lambda.Code.fromAsset(path.join(__dirname, '../../backend/quiz')),
-      environment: commonEnv,
       timeout: cdk.Duration.seconds(60),
     });
 
     const chatLambda = new lambda.Function(this, 'ChatLambda', {
+      ...commonLambdaProps,
       functionName: 'ai-study-chat',
-      runtime: lambda.Runtime.PYTHON_3_11,
-      handler: 'lambda_function.handler',
       code: lambda.Code.fromAsset(path.join(__dirname, '../../backend/chat')),
-      environment: commonEnv,
       timeout: cdk.Duration.seconds(60),
     });
 
@@ -238,7 +258,7 @@ export class InfrastructureStack extends cdk.Stack {
       .addMethod('POST', new apigateway.LambdaIntegration(chatLambda), authOptions);
 
     // ─────────────────────────────────────────
-    // 9. Outputs — save these, you'll need them
+    // 9. Outputs
     // ─────────────────────────────────────────
     new cdk.CfnOutput(this, 'ApiUrl', {
       value: api.url,
