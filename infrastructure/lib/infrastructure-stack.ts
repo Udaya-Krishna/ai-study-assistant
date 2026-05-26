@@ -221,7 +221,7 @@ export class InfrastructureStack extends cdk.Stack {
 
     usersTable.grantReadWriteData(uploadLambda);
     documentsTable.grantReadWriteData(uploadLambda);
-    documentsTable.grantReadData(embedLambda);
+    documentsTable.grantReadWriteData(embedLambda);
     documentsTable.grantReadData(summaryLambda);
     documentsTable.grantReadData(quizLambda);
     documentsTable.grantReadData(chatLambda);
