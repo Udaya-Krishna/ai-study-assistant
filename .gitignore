@@ -12,9 +12,30 @@ __pycache__/
 *.pyc
 .venv/
 
+# Lambda dependency packages (installed locally for bundling)
+backend/upload/bin/
+backend/upload/lib/
+backend/upload/*.dist-info/
+backend/embed/bin/
+backend/embed/lib/
+backend/embed/*.dist-info/
+backend/summary/bin/
+backend/summary/lib/
+backend/summary/*.dist-info/
+backend/quiz/bin/
+backend/quiz/lib/
+backend/quiz/*.dist-info/
+backend/chat/bin/
+backend/chat/lib/
+backend/chat/*.dist-info/
+
+# But keep the requirements.txt files
+!backend/*/requirements.txt
+
 # Build
 dist/
 build/
 
 # OS
 .DS_Store
+Thumbs.db

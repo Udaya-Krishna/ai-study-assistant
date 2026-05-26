@@ -55,6 +55,14 @@ export class InfrastructureStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
+    const embeddingsTable = new dynamodb.Table(this, 'EmbeddingsTable', {
+      tableName: 'ai-study-embeddings',
+      partitionKey: { name: 'documentId', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'chunkIndex', type: dynamodb.AttributeType.STRING },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
+
     // ─────────────────────────────────────────
     // 3. Cognito — Auth
     // ─────────────────────────────────────────
@@ -114,9 +122,9 @@ export class InfrastructureStack extends cdk.Stack {
 
     // Allow Lambda to connect to RDS on port 5432
     dbSecurityGroup.addIngressRule(
-      ec2.Peer.anyIpv4(),
+      lambdaSecurityGroup,
       ec2.Port.tcp(5432),
-      'Allow public access to RDS for dev'
+      'Allow Lambda to connect to RDS'
     );
 
     // ─────────────────────────────────────────
@@ -135,13 +143,12 @@ export class InfrastructureStack extends cdk.Stack {
         ec2.InstanceSize.MICRO
       ),
       vpc,
-      vpcSubnets: { subnetType: ec2.SubnetType.PUBLIC },
+      vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_ISOLATED },
       securityGroups: [dbSecurityGroup],
       credentials: rds.Credentials.fromSecret(dbSecret),
       databaseName: 'studydb',
       removalPolicy: cdk.RemovalPolicy.DESTROY,
       deletionProtection: false,
-      publiclyAccessible: true,
     });
 
     // ─────────────────────────────────────────
@@ -153,6 +160,7 @@ export class InfrastructureStack extends cdk.Stack {
       USERS_TABLE: usersTable.tableName,
       SCORES_TABLE: scoresTable.tableName,
       DOCUMENTS_TABLE: documentsTable.tableName,
+      EMBEDDINGS_TABLE: embeddingsTable.tableName,
       DB_SECRET_ARN: dbSecret.secretArn,
       DB_HOST: process.env.DB_HOST || '',
       DB_PORT: process.env.DB_PORT || '5432',
@@ -166,10 +174,6 @@ export class InfrastructureStack extends cdk.Stack {
       runtime: lambda.Runtime.PYTHON_3_11,
       handler: 'lambda_function.handler',
       environment: commonEnv,
-      vpc,
-      securityGroups: [lambdaSecurityGroup],
-      vpcSubnets: { subnetType: ec2.SubnetType.PUBLIC },
-      allowPublicSubnet: true,
     };
 
     const uploadLambda = new lambda.Function(this, 'UploadLambda', {
@@ -223,6 +227,8 @@ export class InfrastructureStack extends cdk.Stack {
     documentsTable.grantReadData(chatLambda);
     scoresTable.grantReadWriteData(quizLambda);
     scoresTable.grantReadData(chatLambda);
+    embeddingsTable.grantReadWriteData(embedLambda);
+    embeddingsTable.grantReadData(chatLambda);
 
     dbSecret.grantRead(embedLambda);
     dbSecret.grantRead(chatLambda);
